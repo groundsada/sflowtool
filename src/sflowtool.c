@@ -51,6 +51,7 @@ extern "C" {
 #include "sflow_v2v4.h" /* sFlow v2/4 */
 #include "assert.h"
 #include "sflow_xdr.h" /* sFlow encode */
+#include "decoder/include/decoder.h"
 
 #define SPOOFSOURCE 1
 #define YES 1
@@ -267,6 +268,10 @@ typedef struct _SFConfig {
   /* general options */
   int keepGoing;
   int allowDNS;
+
+  /* JSON decoder */
+  int useJSONDecoder;
+  DecoderContext jsonDecoder;
 
 } SFConfig;
 
@@ -1560,6 +1565,26 @@ static void lengthCheck(SFSample *sample, char *description, uint8_t *start, int
   if(actualLen != adjustedLen) {
     fprintf(ERROUT, "%s length error (expected %d, found %d)\n", description, len, actualLen);
     SFABORT(sample, SF_ABORT_LENGTH_ERROR);
+  }
+}
+
+/*_________________---------------------------__________________
+  _________________ outputDecodedProtocol    __________________
+  -----------------___________________________------------------
+  Helper function to output decoded protocol fields recursively
+*/
+
+static void outputDecodedProtocol(SFSample *sample, DecodedProtocol *proto) {
+  uint32_t i;
+  if(!proto || !sample) return;
+  for(i = 0; i < proto->fieldCount; i++) {
+    DecodedField *field = &proto->fields[i];
+    if(field->name && field->value) {
+      sf_logf(sample, field->name, field->value);
+    }
+  }
+  for(i = 0; i < proto->childCount; i++) {
+    outputDecodedProtocol(sample, &proto->children[i]);
   }
 }
 
@@ -3273,7 +3298,20 @@ static void readFlowSample_header(SFSample *sample)
   SFStr_append_hex(&scratch, sample->s.header, sample->s.headerLen, NO, YES, '-');
   sf_logf(sample, "headerBytes", SFStr_str(&scratch));
 
-  switch(sample->s.headerProtocol) {
+  if(sfConfig.useJSONDecoder) {
+    /* Use JSON-driven decoder */
+    DecodedProtocol *decoded = decoder_decodePacket(&sfConfig.jsonDecoder,
+                                                     sample->s.header,
+                                                     sample->s.headerLen,
+                                                     sample->s.headerProtocol);
+    if(decoded) {
+      outputDecodedProtocol(sample, decoded);
+      decoder_freeResult(decoded);
+    }
+  }
+  else {
+    /* Use legacy decoder */
+    switch(sample->s.headerProtocol) {
     /* the header protocol tells us where to jump into the decode */
   case SFLHEADER_ETHERNET_ISO8023:
     decodeLinkLayer(sample);
@@ -3319,7 +3357,8 @@ static void readFlowSample_header(SFSample *sample)
     /* report the size of the original IPPdu (including the IP header) */
     sf_logf_U32_formatted(sample, NULL, "IPSize", "%d", sample->s.sampledPacketSize - sample->s.stripped - sample->s.offsetToIPV6);
     decodeIPV6(sample);
-  }
+    }
+  } /* end else for sfConfig.useJSONDecoder */
 
 }
 
@@ -6688,6 +6727,7 @@ static void process_command_line(int argc, char *argv[])
        { "listen-v6-only", no_argument, NULL, '6' },
        { "listen-v4-v6", no_argument, NULL, 'A' },
        { "keep-going-on-error", no_argument, NULL, 'k' },
+       { "json-decode", no_argument, NULL, 'Y' },
        { "help", no_argument, NULL, 'h' },
        { "usage", no_argument, NULL, '?' },
        { "version", no_argument, NULL, 'z' },
@@ -6709,7 +6749,7 @@ static void process_command_line(int argc, char *argv[])
 
     in = getopt_long(argc,
 		     argv,
-		     "ljJgtTM<HxesSD46Akh?zL:p:r:R:P:c:d:N:f:v:V:b:",
+		     "ljJgtTM<HxesSD46Akh?zL:p:r:R:P:c:d:N:f:v:V:b:Y",
 		     long_options,
 		     &option_index);
 
@@ -6818,6 +6858,9 @@ static void process_command_line(int argc, char *argv[])
     case 'k':
       sfConfig.keepGoing = YES;
       break;
+    case 'Y':
+      sfConfig.useJSONDecoder = YES;
+      break;
     case 'D':
       sfConfig.allowDNS = YES;
       break;
@@ -6845,6 +6888,14 @@ int main(int argc, char *argv[])
 
   /* read the command line */
   process_command_line(argc, argv);
+
+  /* Initialize JSON decoder if requested */
+  if(sfConfig.useJSONDecoder) {
+    if(decoder_init(&sfConfig.jsonDecoder, NULL) != 0) {
+      fprintf(ERROUT, "Failed to initialize JSON decoder: %s\n", sfConfig.jsonDecoder.errorBuffer);
+      exit(-1);
+    }
+  }
 
   /* reading from file or socket? */
   if(sfConfig.readPcapFileName) {
