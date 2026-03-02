@@ -1259,6 +1259,7 @@ static void sf_log(SFSample *sample, char *fmt, ...) {
     if(vprintf(fmt, args) < 0) {
       exit(-40);
     }
+    va_end(args);
   }
 }
 
