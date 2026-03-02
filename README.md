@@ -1,4 +1,6 @@
 # sflowtool
+
+Minor update: lint issues resolved.
 Print binary sFlow feed to ASCII, or forward it to other collectors.
 
 This tool receives sFlow data, and generates ASCII, JSON, CSV, tcpdump(1) or NetFlow(TM) output.
