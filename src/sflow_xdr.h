@@ -8,6 +8,13 @@
 extern "C" {
 #endif
 
+#include <stddef.h>
+#include <stdint.h>
+#include <arpa/inet.h>
+#include <sys/uio.h>
+#include <string.h>
+#include "sflow.h"
+
   // sFlow datagram encoding (XDR)
   // Multi-threading considerations:
   // The SFD* functions may require synchronization if the counter-samples are
