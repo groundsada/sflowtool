@@ -3474,8 +3474,8 @@ static void readFlowSample_IPv6(SFSample *sample, char *prefix)
     SFLSampled_ipv6 nfKey6;
     memcpy(&nfKey6, sample->s.header, sizeof(nfKey6));
     sample->s.sampledPacketSize = ntohl(nfKey6.length);
-    sf_logf_U32(sample, "sampledPacketSize", sample->s.sampledPacketSize); 
-    sf_logf_U32(sample, "IPSize", sample->s.sampledPacketSize); 
+    sf_logf_U32(sample, "sampledPacketSize", sample->s.sampledPacketSize);
+    sf_logf_U32(sample, "IPSize", sample->s.sampledPacketSize);
     sample->s.ipsrc.type = SFLADDRESSTYPE_IP_V6;
     memcpy(&sample->s.ipsrc.address.ip_v6, &nfKey6.src_ip, 16);
     sample->s.ipdst.type = SFLADDRESSTYPE_IP_V6;

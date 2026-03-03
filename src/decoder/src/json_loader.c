@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <cJSON.h>
+#include <cjson/cJSON.h>
 #include "../include/protocol.h"
 #include "../include/json_loader.h"
 
